@@ -54,6 +54,7 @@
             this.pdfPictureBox.Size = new System.Drawing.Size(204, 268);
             this.pdfPictureBox.TabIndex = 1;
             this.pdfPictureBox.TabStop = false;
+           
             // 
             // btnCaptureSignature
             // 

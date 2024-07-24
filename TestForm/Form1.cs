@@ -21,6 +21,7 @@ enum PenDataOptionMode
 
 
 
+
 namespace TestForm
 {
     public partial class Form1 : Form
@@ -31,7 +32,7 @@ namespace TestForm
         private wgssSTU.IInformation m_information;
         private wgssSTU.IProtocolHelper m_protocolHelper;
         private Bitmap m_bitmap;
-   
+
 
         public Form1()
         {
@@ -48,12 +49,24 @@ namespace TestForm
                 pdfPath = openFileDialog.FileName;
 
                 // Render PDF to Bitmap using PdfiumViewer
-                using (var document = PdfDocument.Load(pdfPath))
+                using (var pdfDocument = PdfiumViewer.PdfDocument.Load(pdfPath))
                 {
-                    var page = document.Render(0, 300, 300, true); // Render the first page at 300 DPI
-                    pdfPictureBox.Image = page;
+                    var pageSize = pdfDocument.PageSizes[0];
+                    m_bitmap = new Bitmap((int)pageSize.Width, (int)pageSize.Height);
+
+                    using (var bitmapGraphics = Graphics.FromImage(m_bitmap))
+                    {
+                        bitmapGraphics.Clear(Color.White);
+                        using (var pageBitmap = pdfDocument.Render(0, (int)pageSize.Width, (int)pageSize.Height, true))
+                        {
+                            bitmapGraphics.DrawImage(pageBitmap, 0, 0, pageBitmap.Width, pageBitmap.Height);
+                        }
+                    }
+
+                    pdfPictureBox.Image = m_bitmap;
                 }
             }
+
         }
 
 
@@ -154,26 +167,45 @@ namespace TestForm
                 if (saveFileDialog.ShowDialog() == DialogResult.OK)
                 {
                     string savePath = saveFileDialog.FileName;
-                    PdfDocument document = PdfReader.Open(pdfPath, PdfDocumentOpenMode.Modify);
-                    PdfPage page = document.Pages[0];
-                    XGraphics gfx = XGraphics.FromPdfPage(page);
 
-                    // Save the signature image to a temporary file and then load it back as XImage
+                    // Save the signature image to a temporary file and then load it back as an image
                     string tempPath = Path.GetTempFileName();
                     signaturePictureBox.Image.Save(tempPath, System.Drawing.Imaging.ImageFormat.Png);
-                    XImage xImage = XImage.FromFile(tempPath);
 
-                    // Specify the position where the signature should be placed
-                    int xPosition = 100; // Example x position
-                    int yPosition = 100; // Example y position
-                    gfx.DrawImage(xImage, xPosition, yPosition, xImage.PixelWidth, xImage.PixelHeight);
+                    // Use PdfiumViewer to load and modify the PDF
+                    using (var pdfDocument = PdfiumViewer.PdfDocument.Load(pdfPath))
+                    {
+                        var pageSize = pdfDocument.PageSizes[0];
+                        using (var bitmap = new Bitmap((int)pageSize.Width, (int)pageSize.Height))
+                        {
+                            using (var graphics = Graphics.FromImage(bitmap))
+                            {
+                                graphics.Clear(Color.White);
+                                using (var pageBitmap = pdfDocument.Render(0, (int)pageSize.Width, (int)pageSize.Height, true))
+                                {
+                                    graphics.DrawImage(pageBitmap, 0, 0, pageBitmap.Width, pageBitmap.Height);
 
-                    document.Save(savePath);
+                                    // Draw the signature on the rendered PDF page
+                                    using (var signature = new Bitmap(tempPath))
+                                    {
+                                        graphics.DrawImage(signature, new System.Drawing.Rectangle(100, 100, signature.Width, signature.Height));
+                                    }
+                                }
+                            }
+
+                            // Save the modified page as a new PDF
+                            using (var stream = new FileStream(savePath, FileMode.Create))
+                            {
+                                bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                            }
+                        }
+                    }
                     MessageBox.Show("PDF saved successfully.");
 
                     // Clean up temporary file
                     File.Delete(tempPath);
                 }
+
             }
         }
     }
